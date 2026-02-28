@@ -35,6 +35,8 @@ export interface ActiveSession {
   currentProvider: 'claude' | 'gemini' | 'openrouter' | null;  // Track which provider is currently running
   consecutiveRestarts: number;  // Track consecutive restart attempts to prevent infinite loops
   forceInit?: boolean;  // Force fresh SDK session (skip resume)
+  idleTimedOut?: boolean;  // Set when session exits due to idle timeout (prevents restart loop)
+  lastGeneratorActivity: number;  // Timestamp of last generator progress (for stale detection, Issue #1099)
   // CLAIM-CONFIRM FIX: Track IDs of messages currently being processed
   // These IDs will be confirmed (deleted) after successful storage
   processingMessageIds: number[];

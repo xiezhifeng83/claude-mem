@@ -1,6 +1,8 @@
 datasets/
 node_modules/
 dist/
+!installer/dist/
+**/_tree-sitter/
 *.log
 .DS_Store
 .env
@@ -11,12 +13,15 @@ dist/
 .claude/settings.local.json
 .claude/agents/
 .claude/skills/
+.claude/plans/
+.claude/worktrees/
 plugin/data/
 plugin/data.backup/
 package-lock.json
 bun.lock
 private/
 datasets/
+Auto Run Docs/
 
 # Generated UI files (built from viewer-template.html)
 src/ui/viewer.html

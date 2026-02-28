@@ -7,12 +7,48 @@
  */
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { execSync, spawnSync } from 'child_process';
-import { join } from 'path';
+import { join, dirname } from 'path';
 import { homedir } from 'os';
+import { fileURLToPath } from 'url';
 
-const ROOT = join(homedir(), '.claude', 'plugins', 'marketplaces', 'thedotmack');
-const MARKER = join(ROOT, '.install-version');
 const IS_WINDOWS = process.platform === 'win32';
+
+/**
+ * Resolve the plugin root directory where dependencies should be installed.
+ *
+ * Priority:
+ * 1. CLAUDE_PLUGIN_ROOT env var (set by Claude Code for hooks — works for
+ *    both cache-based and marketplace installs)
+ * 2. Script location (dirname of this file, up one level from scripts/)
+ * 3. XDG path (~/.config/claude/plugins/marketplaces/thedotmack)
+ * 4. Legacy path (~/.claude/plugins/marketplaces/thedotmack)
+ */
+function resolveRoot() {
+  // CLAUDE_PLUGIN_ROOT is the authoritative location set by Claude Code
+  if (process.env.CLAUDE_PLUGIN_ROOT) {
+    const root = process.env.CLAUDE_PLUGIN_ROOT;
+    if (existsSync(join(root, 'package.json'))) return root;
+  }
+
+  // Derive from script location (this file is in <root>/scripts/)
+  try {
+    const scriptDir = dirname(fileURLToPath(import.meta.url));
+    const candidate = dirname(scriptDir);
+    if (existsSync(join(candidate, 'package.json'))) return candidate;
+  } catch {
+    // import.meta.url not available
+  }
+
+  // Probe XDG path, then legacy
+  const marketplaceRel = join('plugins', 'marketplaces', 'thedotmack');
+  const xdg = join(homedir(), '.config', 'claude', marketplaceRel);
+  if (existsSync(join(xdg, 'package.json'))) return xdg;
+
+  return join(homedir(), '.claude', marketplaceRel);
+}
+
+const ROOT = resolveRoot();
+const MARKER = join(ROOT, '.install-version');
 
 // Common installation paths (handles fresh installs before PATH reload)
 const BUN_COMMON_PATHS = IS_WINDOWS
@@ -245,12 +281,42 @@ function installDeps() {
   }));
 }
 
+/**
+ * Verify that critical runtime modules are resolvable from the install directory.
+ * Returns true if all critical modules exist, false otherwise.
+ */
+function verifyCriticalModules() {
+  const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf-8'));
+  const dependencies = Object.keys(pkg.dependencies || {});
+
+  const missing = [];
+  for (const dep of dependencies) {
+    const modulePath = join(ROOT, 'node_modules', ...dep.split('/'));
+    if (!existsSync(modulePath)) {
+      missing.push(dep);
+    }
+  }
+
+  if (missing.length > 0) {
+    console.error(`❌ Post-install check failed: missing modules: ${missing.join(', ')}`);
+    return false;
+  }
+
+  return true;
+}
+
 // Main execution
 try {
   if (!isBunInstalled()) installBun();
   if (!isUvInstalled()) installUv();
   if (needsInstall()) {
     installDeps();
+
+    if (!verifyCriticalModules()) {
+      console.error('❌ Dependencies could not be installed. Plugin may not work correctly.');
+      process.exit(1);
+    }
+
     console.error('✅ Dependencies installed');
   }
 } catch (e) {

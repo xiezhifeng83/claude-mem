@@ -6,7 +6,7 @@ export const claudeCodeAdapter: PlatformAdapter = {
   normalizeInput(raw) {
     const r = (raw ?? {}) as any;
     return {
-      sessionId: r.session_id,
+      sessionId: r.session_id ?? r.id ?? r.sessionId,
       cwd: r.cwd ?? process.cwd(),
       prompt: r.prompt,
       toolName: r.tool_name,
@@ -17,7 +17,11 @@ export const claudeCodeAdapter: PlatformAdapter = {
   },
   formatOutput(result) {
     if (result.hookSpecificOutput) {
-      return { hookSpecificOutput: result.hookSpecificOutput };
+      const output: Record<string, unknown> = { hookSpecificOutput: result.hookSpecificOutput };
+      if (result.systemMessage) {
+        output.systemMessage = result.systemMessage;
+      }
+      return output;
     }
     return { continue: result.continue ?? true, suppressOutput: result.suppressOutput ?? true };
   }
